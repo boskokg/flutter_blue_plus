@@ -304,6 +304,18 @@ class ScanResult {
   }
 }
 
+class AdvertisementDataElement {
+  final int identifier;
+  final Uint8List value;
+
+  AdvertisementDataElement({required this.identifier, required this.value});
+
+  @override
+  String toString() {
+    return 'AdvertisementDataElement{identifier: $identifier, value: $value}';
+  }
+}
+
 class AdvertisementData {
   final String localName;
   final int? txPowerLevel;
@@ -311,6 +323,35 @@ class AdvertisementData {
   final Map<int, List<int>> manufacturerData;
   final Map<String, List<int>> serviceData;
   final List<String> serviceUuids;
+  final Uint8List rawBytes;
+  final List<AdvertisementDataElement> elements;
+
+  /// Parse raw advertising bytes to a List of ADV element
+  ///
+  /// Documentation comes from here: https://docs.silabs.com/bluetooth/latest/general/adv-and-scanning/bluetooth-adv-data-basics
+  static List<AdvertisementDataElement> parseRawAdvertisementBytes(
+      Uint8List rawAdvertisingBytes) {
+    List<AdvertisementDataElement> otherData = [];
+    for (int advCounter = 0;
+        advCounter < rawAdvertisingBytes.length;
+        advCounter++) {
+      int dataLen = rawAdvertisingBytes[advCounter++];
+      if (dataLen == 0) continue;
+      int typeIdentifier = rawAdvertisingBytes[advCounter++];
+      int offset = (dataLen - 2);
+      otherData.add(
+        AdvertisementDataElement(
+          identifier: typeIdentifier,
+          value: rawAdvertisingBytes.sublist(
+            advCounter,
+            advCounter + (offset + 1),
+          ),
+        ),
+      ); // +1 as end must be the next element
+      advCounter += offset;
+    }
+    return otherData;
+  }
 
   AdvertisementData.fromProto(protos.AdvertisementData p)
       : localName = p.localName,
@@ -319,10 +360,13 @@ class AdvertisementData {
         connectable = p.connectable,
         manufacturerData = p.manufacturerData,
         serviceData = p.serviceData,
-        serviceUuids = p.serviceUuids;
+        serviceUuids = p.serviceUuids,
+        rawBytes = Uint8List.fromList(p.rawBytes),
+        elements = AdvertisementData.parseRawAdvertisementBytes(
+            Uint8List.fromList(p.rawBytes));
 
   @override
   String toString() {
-    return 'AdvertisementData{localName: $localName, txPowerLevel: $txPowerLevel, connectable: $connectable, manufacturerData: $manufacturerData, serviceData: $serviceData, serviceUuids: $serviceUuids}';
+    return 'AdvertisementData{localName: $localName, txPowerLevel: $txPowerLevel, connectable: $connectable, manufacturerData: $manufacturerData, serviceData: $serviceData, serviceUuids: $serviceUuids, rawBytes: ${hex.encode(rawBytes)}}';
   }
 }
